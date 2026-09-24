@@ -1,0 +1,29 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment / secrets
+.env
+.env.local
+
+# OS / editor cruft
+.DS_Store
+.vscode/
+.idea/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# App-generated data (local job history, favorites, presets, temp outputs)
+data/history.json
+data/favorites.json
+data/presets.json
+data/output/
+data/tmp/
+*.log

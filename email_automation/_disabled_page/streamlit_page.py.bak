@@ -1,0 +1,106 @@
+"""Email Automation — send personalized bulk emails from a CSV + template."""
+import os
+import sys
+from pathlib import Path
+
+import streamlit as st
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from email_automation.send_emails import send_emails  # noqa: E402
+from webapp_utils import apply_branding, capture_log, page_header, temp_workspace  # noqa: E402
+
+st.set_page_config(page_title="Email Automation", page_icon="✉️", layout="wide")
+apply_branding()
+page_header(
+    "✉️", "Email Automation",
+    "Send personalized emails to a list of recipients using a template with "
+    "{placeholder} fields filled in from a CSV. Always preview with a dry run first.",
+)
+st.info(
+    "SMTP credentials are only kept in memory for this run — they're never saved to disk "
+    "or logged. For Gmail, use an **App Password**, not your normal account password."
+)
+
+with st.form("email_automation_form"):
+    recipients_upload = st.file_uploader("Recipients CSV (must include an 'email' column)", type="csv")
+
+    st.write("**Template** — first line `Subject: ...`, then the body. Use `{column_name}` for placeholders.")
+    template_text = st.text_area(
+        "Template",
+        value="Subject: Hello {name}!\n\nHi {name}, thanks for being a customer at {company}.",
+        height=150,
+    )
+    attachment_upload = st.file_uploader("Attachment (optional)")
+
+    st.divider()
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        sender = st.text_input("Sender email")
+    with col2:
+        password = st.text_input("Sender password / app password", type="password")
+    with col3:
+        smtp_server = st.text_input("SMTP server", value="smtp.gmail.com")
+    smtp_port = st.number_input("SMTP port", value=587, step=1)
+
+    really_send = st.checkbox("I've reviewed the dry run and want to actually send these emails")
+    submitted = st.form_submit_button(
+        "Send Emails" if really_send else "Preview (Dry Run)", type="primary"
+    )
+
+if submitted:
+    if not recipients_upload:
+        st.warning("Upload a recipients CSV first.")
+    elif really_send and (not sender or not password):
+        st.error("Sender email and password are required to actually send emails.")
+    else:
+        with temp_workspace() as workspace:
+            recipients_path = workspace / "recipients.csv"
+            recipients_path.write_bytes(recipients_upload.getbuffer())
+
+            template_path = workspace / "template.txt"
+            template_path.write_text(template_text)
+
+            attachment_path = None
+            if attachment_upload:
+                attachment_path = workspace / attachment_upload.name
+                attachment_path.write_bytes(attachment_upload.getbuffer())
+
+            env_backup = {
+                k: os.environ.get(k)
+                for k in ("EMAIL_SENDER", "EMAIL_PASSWORD", "SMTP_SERVER", "SMTP_PORT")
+            }
+            if really_send:
+                os.environ["EMAIL_SENDER"] = sender
+                os.environ["EMAIL_PASSWORD"] = password
+                os.environ["SMTP_SERVER"] = smtp_server
+                os.environ["SMTP_PORT"] = str(int(smtp_port))
+
+            summary, lines = None, []
+            try:
+                with capture_log("send_emails") as lines:
+                    summary = send_emails(
+                        recipients_path,
+                        template_path,
+                        dry_run=not really_send,
+                        attachment=attachment_path,
+                    )
+            except Exception as e:
+                st.error(f"Error: {e}")
+            finally:
+                for k, v in env_backup.items():
+                    if v is None:
+                        os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
+
+        if summary:
+            st.code("\n".join(lines) or "Nothing to show.", language=None)
+            st.success(f"Total recipients: {summary['total_recipients']}")
+            if really_send:
+                st.write(f"**Sent:** {summary['sent']}")
+                if summary["failed"]:
+                    st.warning(f"**Failed:** {', '.join(summary['failed'])}")
+            else:
+                st.info("This was a dry run — no emails were sent. Check the box above and submit again to send.")

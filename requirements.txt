@@ -1,0 +1,9 @@
+# Python Automation Toolkit — Web App
+# Install with: pip install -r requirements.txt
+# Run with:     streamlit run app.py
+
+streamlit>=1.38.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+reportlab>=4.0.0
+pytest>=7.0.0

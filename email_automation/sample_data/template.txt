@@ -1,0 +1,8 @@
+Subject: Hello {name}, quick update from {company}
+
+Hi {name},
+
+Thanks for being a valued partner at {company}. Just wanted to share our latest update with you.
+
+Best,
+Mayu
